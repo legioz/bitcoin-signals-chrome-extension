@@ -39,27 +39,134 @@ async function getFearAndGreedIndex() {
     }
 }
 
+function calculateRSI(prices, period) {
+    let gains = 0;
+    let losses = 0;
+
+    for (let i = 1; i <= period; i++) {
+        const change = prices[i] - prices[i - 1];
+        if (change > 0) {
+            gains += change;
+        } else {
+            losses -= change;
+        }
+    }
+
+    let avgGain = gains / period;
+    let avgLoss = losses / period;
+
+    for (let i = period; i < prices.length; i++) {
+        const change = prices[i] - prices[i - 1];
+        const gain = change > 0 ? change : 0;
+        const loss = change < 0 ? -change : 0;
+
+        avgGain = (avgGain * (period - 1) + gain) / period;
+        avgLoss = (avgLoss * (period - 1) + loss) / period;
+    }
+
+    const rs = avgLoss === 0 ? 0 : avgGain / avgLoss; 
+    const rsi = 100 - (100 / (1 + rs));
+
+    return rsi;
+}
+
+function calculateStochasticRSI(prices, kPeriod, dPeriod) {
+    const rsiValues = [];
+
+    for (let i = 0; i <= prices.length - kPeriod; i++) {
+        const priceSlice = prices.slice(i, i + kPeriod);
+        const changes = [];
+        for (let j = 1; j < priceSlice.length; j++) {
+            changes.push(priceSlice[j] - priceSlice[j - 1]);
+        }
+
+        const gains = changes.filter(c => c > 0);
+        const losses = changes.filter(c => c < 0);
+        const avgGain = gains.length ? gains.reduce((a, b) => a + b, 0) / kPeriod : 0;
+        const avgLoss = losses.length ? -losses.reduce((a, b) => a + b, 0) / kPeriod : 0;
+
+        const rs = avgLoss === 0 ? 0 : avgGain / avgLoss;
+        const rsi = 100 - (100 / (1 + rs));
+        rsiValues.push(rsi);
+    }
+
+    const stochRsiValues = [];
+    for (let i = 0; i <= rsiValues.length - dPeriod; i++) {
+        const rsiSlice = rsiValues.slice(i, i + dPeriod);
+        const minRsi = Math.min(...rsiSlice);
+        const maxRsi = Math.max(...rsiSlice);
+        const stochRsi = (maxRsi - minRsi) === 0 ? 0 : ((rsiValues[i + dPeriod - 1] - minRsi) / (maxRsi - minRsi)) * 100;
+        stochRsiValues.push(stochRsi);
+    }
+
+    return stochRsiValues;
+}
+
+function calculateSlowStochastic(prices, kPeriod, dPeriod) {
+    const kValues = [];
+
+    for (let i = kPeriod - 1; i < prices.length; i++) {
+        const priceSlice = prices.slice(i - kPeriod + 1, i + 1);
+        const minPrice = Math.min(...priceSlice);
+        const maxPrice = Math.max(...priceSlice);
+
+        // Evitar divisão por zero
+        const range = maxPrice - minPrice;
+        const kValue = range !== 0 ? ((prices[i] - minPrice) / range) * 100 : 0;
+        kValues.push(kValue);
+    }
+
+    const dValues = [];
+    for (let i = dPeriod - 1; i < kValues.length; i++) {
+        const dValue = kValues.slice(i - dPeriod + 1, i + 1).reduce((a, b) => a + b, 0) / dPeriod;
+        dValues.push(dValue);
+    }
+
+    return dValues;
+}
+
+async function getOscillators() {
+    try {
+        const response = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h');
+        const data = await response.json();
+        const closePrices = data.map(d => parseFloat(d[4]));
+        const rsi = calculateRSI(closePrices, 14);
+        const stoch = calculateSlowStochastic(closePrices, 14, 3);
+        const oscillators = {
+            rsi: rsi,
+            stoch: stoch,
+        };
+        return oscillators;
+    } catch (error) {
+        console.error('Error fetching the Stoch RSI:', error);
+        return {};
+    }
+}
+
 async function updateFields() {
     let index = await getFearAndGreedIndex();
     let indexText = '';
     let badgeColor;
     if (index < 20) {
-        badgeColor = '#00FF00';
+        badgeColor = 'greenyellow';
         indexText = 'Extreme Fear!';
+        indexColor = 'green';
     } else if (index < 40) {
-        badgeColor = '#33FF00';
+        badgeColor = 'green';
         indexText = 'Fear!';
+        indexColor = 'green';
     } else if (index < 60) {
-        badgeColor = '#66FF00';
+        badgeColor = 'white';
         indexText = 'Neutral';
-    } else if (index < 80) {
-        badgeColor = '#99FF00';
+    } else if (index < 72) {
+        badgeColor = 'yellow';
         indexText = 'Greed!';
+        indexColor = 'orange';
     } else {
-        badgeColor = '#CCFF00';
+        badgeColor = 'red';
         indexText = 'Extreme Greed!';
+        indexColor = 'red';
     }
-    let indexColor = (index < 50) ? '#FF0000' : '#009900';
     document.getElementById('index').innerHTML = `Fear & Greed Index: <b>${indexText}</b> <b style="color: ${indexColor}">${index}</b>`;
     const btcPrice = await getBTCPrice();
     if (btcPrice) {
@@ -71,13 +178,13 @@ async function updateFields() {
     if (mayerMultiple) {
         let mayerMultipleColor;
         if (mayerMultiple < 1) {
-            mayerMultipleColor = '#FF0000';
+            mayerMultipleColor = 'green';
         } else if (mayerMultiple < 2) {
-            mayerMultipleColor = '#FF6600';
+            mayerMultipleColor = 'orange';
         } else if (mayerMultiple < 2.4) {
-            mayerMultipleColor = '#FFCC00';
+            mayerMultipleColor = 'orangered';
         } else {
-            mayerMultipleColor = '#00FF00';
+            mayerMultipleColor = 'red';
         }
         document.getElementById('mayer-multiple').innerHTML = `Mayer Multiple: <b style="color: ${mayerMultipleColor}">${mayerMultiple.toFixed(2)}</b>`;
     } else {
@@ -87,16 +194,29 @@ async function updateFields() {
     let signal = '';
 
     if (index > 60 && mayerMultiple > 2) {
-        signal = '<b style="color: #FF0000">SELL!</b>';
+        signal = '<h3 style="color: red">SELL!</h3>';
         if (index > 70 && mayerMultiple > 2.4) {
-            signal = '<b style="color: #FF0000">STRONG SELL!</b>';
+            signal = '<h3 style="color: red">STRONG SELL!</h3>';
         }
     } else {
-        signal = '<b style="color: #009900">BUY AND HODL</b>';
+        signal = '<h3 style="color: green">BUY AND HODL</h3>';
     }
 
-    document.getElementById('signal').innerHTML = signal;
+    document.getElementById('signal').innerHTML = signal + '<hr>';
 
+    const oscillators = await getOscillators();
+    let oscillatorsHTML = '<hr>';
+    oscillatorsHTML += '<h3>Oscillators</h3>';
+    oscillatorsHTML += `<b>RSI:</b> ${oscillators.rsi.toFixed(2)}<br>`;
+    oscillatorsHTML += `<b>Slow Stoch:</b> ${oscillators.stoch[oscillators.stoch.length - 1].toFixed(2)}<br>`;
+
+    if (oscillators.rsi > 70 || oscillators.stoch[oscillators.stoch.length - 1] > 80) {
+        oscillatorsHTML += '<small style="color: red">Overbought!</small>';
+    } else if (oscillators.rsi < 30 || oscillators.stoch[oscillators.stoch.length - 1] < 20) {
+        oscillatorsHTML += '<small style="color: green">Oversold!</small>';
+    }
+    
+    document.getElementById('oscillators').innerHTML = oscillatorsHTML;
 
     chrome.action.setBadgeBackgroundColor({ color: badgeColor });
     chrome.action.setBadgeText({ text: index.toString() });
