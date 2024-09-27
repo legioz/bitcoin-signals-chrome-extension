@@ -1,0 +1,24 @@
+{
+    "manifest_version": 3,
+    "name": "Bitcoin Signals",
+    "version": "1.0",
+    "description": "Displays the current Fear and Greed Index, Mayer Multiple, and other metrics for Bitcoin and provides buy/sell signals based on these metrics.",
+    "permissions": [
+        "activeTab",
+        "background",
+        "storage",
+        "alarms",
+        "https://api.alternative.me/fng/"
+    ],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "action": {
+        "default_popup": "popup.html",
+        "default_icon": {
+            "16": "icon.png",
+            "48": "icon.png",
+            "128": "icon.png"
+        }
+    }
+}
