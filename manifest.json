@@ -2,13 +2,18 @@
     "manifest_version": 3,
     "name": "Bitcoin Signals",
     "version": "1.0",
-    "description": "Displays the current Fear and Greed Index, Mayer Multiple, and other metrics for Bitcoin and provides buy/sell signals based on these metrics.",
+    "description": "Displays Fear and Greed Index, Mayer Multiple, and other metrics for Bitcoin and provides buy/sell signals.",
     "permissions": [
         "activeTab",
         "background",
         "storage",
         "alarms",
-        "https://api.alternative.me/fng/"
+        "https://api.alternative.me/fng/",
+        "https://api.coingecko.com/"
+    ],
+    "host_permissions": [ 
+        "https://api.coingecko.com/",
+        "https://api.alternative.me/"
     ],
     "background": {
         "service_worker": "background.js"
